@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shortcut Builder</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #C0C0C0;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1976d2;
+      color: white;
+      padding: 1rem;
+    }
+    main {
+      padding: 1rem;
+    }
+    .box {
+      background: white;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      margin-bottom: 0.25rem;
+      font-weight: bold;
+    }
+    input[type="text"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 0.5rem;
+      margin-bottom: 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    button {
+      background: #1976d2;
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      margin-right: 0.5rem;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    .note {
+      font-size: 0.9rem;
+      color: #555;
+      margin-top: -0.5rem;
+      margin-bottom: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Shortcut Builder</h1>
+  </header>
+  <main>
+    <!-- 1) Collect the user’s UID (they must know their Firebase UID) -->
+    <div class="box">
+      <label for="uid-input">Your Firebase UID:</label>
+      <input type="text" id="uid-input" placeholder="e.g. cy43w8xm57WWr3n151WGX4mPgCT2" />
+      <p class="note">❗ iOS Shortcut cannot fetch an ID Token automatically—enter your UID here so the server can verify “/user_access/{uid}/…”</p>
+    </div>
+
+    <!-- 2) Let them choose House ID & Device ID from dropdowns -->
+    <div class="box">
+      <label for="house-select">Choose House ID:</label>
+      <select id="house-select">
+        <option value="">— Select a House —</option>
+      </select>
+
+      <label for="device-select">Choose Device ID:</label>
+      <select id="device-select" disabled>
+        <option value="">— Select a Device —</option>
+      </select>
+    </div>
+
+    <!-- 3) Let them choose one of the allowed commands -->
+    <div class="box">
+      <label for="command-select">Command:</label>
+      <select id="command-select" disabled>
+        <option value="">— Select Command —</option>
+        <option value="OPEN">OPEN</option>
+        <option value="CLOSE">CLOSE</option>
+        <option value="STOP">STOP</option>
+        <option value="ON">ON</option>
+        <option value="OFF">OFF</option>
+      </select>
+    </div>
+
+    <!-- 4) “Generate Request” button -->
+    <div class="box">
+      <button id="generate-request-btn" disabled>Generate HTTP Request</button>
+      <p class="note">Once you click “Generate HTTP Request,” you’ll see the exact URL + JSON body to copy into your Shortcut.</p>
+    </div>
+
+    <!-- 5) Show generated URL + JSON body -->
+    <div class="box" id="request-output-box" style="display:none;">
+      <p><strong>Cloud Function URL:</strong></p>
+      <input type="text" id="endpoint-url" readonly />
+
+      <label for="body-json">JSON Request Body:</label>
+      <textarea id="body-json" rows="4" readonly></textarea>
+
+      <p class="note">
+        In your iOS Shortcut, use “Get Contents of URL” → Method: POST → Headers (“x-api-key” : <API_KEY>) + no other headers needed → Request Body = “raw JSON” (paste the JSON below).
+      </p>
+      <button id="copy-url-btn">Copy URL to Clipboard</button>
+      <button id="copy-body-btn">Copy Body JSON to Clipboard</button>
+    </div>
+  </main>
+
+  <!-- Include Firebase App + Firestore SDK (to list houses/devices if you store them in Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="config.js"></script>
+  <script src="js/script.js"></script>
+</body>
+</html>

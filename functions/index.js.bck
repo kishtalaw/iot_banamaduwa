@@ -1,0 +1,123 @@
+// index.js
+
+const admin = require("firebase-admin");
+const {SecretManagerServiceClient} = require("@google-cloud/secret-manager");
+const {onRequest} = require("firebase-functions/v2/https");
+const {onSchedule} = require("firebase-functions/v2/scheduler");
+
+try {
+  admin.initializeApp();
+} catch (e) {
+  if (!e.message.includes("already exists")) {
+    console.error("Firebase Admin initialization error:", e);
+  }
+}
+
+/**
+ * runScheduledCommands
+ *
+ * This function is triggered every minute by Cloud Scheduler in the Asia/Colombo time zone.
+ * Because relying on event.timestamp can be unreliable on v2/Cloud Run, we compute “now” ourselves:
+ *   • Let UTC = new Date().
+ *   • Add 5 hours, 30 minutes to get Colombo local time.
+ * Then:
+ *   1) Execute any “once” schedules (runAt <= nowMs) and delete them.
+ *   2) Execute any “daily” schedules (hour/minute match now AND lastRunDate ≠ today) and update lastRunDate.
+ */
+exports.runScheduledCommands = onSchedule(
+    {
+      schedule: "* * * * *", // every minute
+      timeZone: "Asia/Colombo", // ensure scheduler itself uses Colombo—but we also compute time manually
+    },
+    async (event) => {
+    // 2) Compute “now” in Asia/Colombo by adding UTC+5:30 offset to the current UTC time.
+      const utcNow = new Date();
+      const offsetMin = 5 * 60 + 30; // 5 hours 30 minutes = 330 minutes
+      const offsetMs = offsetMin * 60 * 1000; // in milliseconds
+      const colomboMs = utcNow.getTime() + offsetMs;
+      const now = new Date(colomboMs); // “now” in Colombo time
+      const nowMs = now.getTime();
+
+      // Extract local hour/minute in Colombo
+      const currHour = now.getUTCHours(); // getUTCHours on this shifted timestamp gives local hour
+      const currMinute = now.getUTCMinutes(); // getUTCMinutes on this shifted timestamp gives local minute
+
+      // Build today’s date string “YYYY-MM-DD” in Colombo
+      const yyyy = now.getUTCFullYear();
+      const mm = String(now.getUTCMonth() + 1).padStart(2, "0"); // month is zero-indexed
+      const dd = String(now.getUTCDate()).padStart(2, "0");
+      const todayStr = ${yyyy}-${mm}-${dd}; // e.g. "2025-06-05"
+
+      const db = admin.database();
+      const schedRef = db.ref("scheduled_commands");
+
+      try {
+      // ===================================
+      // 1) Handle “once” schedules
+      // ===================================
+        const onceSnapshot = await schedRef
+            .orderByChild("type")
+            .equalTo("once")
+            .once("value");
+
+        if (onceSnapshot.exists()) {
+          onceSnapshot.forEach((childSnap) => {
+            const key = childSnap.key;
+            const data = childSnap.val();
+            // Only run if runAt is a number and runAt <= nowMs
+            if (typeof data.runAt === "number" && data.runAt <= nowMs) {
+              const {houseId, deviceId, command} = data;
+              const cmdRef = db.ref(/houses/${houseId}/devices/${deviceId}/command);
+              cmdRef
+                  .set(command)
+                  .then(() => {
+                    console.log((Once) Executed [${key}]: ${houseId}/${deviceId} → ${command});
+                    // Delete this one-time schedule so it never runs again
+                    return schedRef.child(key).remove();
+                  })
+                  .catch((err) => {
+                    console.error(Error executing one-time schedule ${key}:, err);
+                  });
+            }
+          });
+        }
+
+        // ===================================
+        // 2) Handle “daily” schedules
+        // ===================================
+        const dailySnapshot = await schedRef
+            .orderByChild("type")
+            .equalTo("daily")
+            .once("value");
+
+        if (dailySnapshot.exists()) {
+          dailySnapshot.forEach((childSnap) => {
+            const key = childSnap.key;
+            const data = childSnap.val();
+            const {houseId, deviceId, command, hour, minute, lastRunDate} = data;
+            // Only run if this entry’s hour/minute match currHour/currMinute
+            if (hour === currHour && minute === currMinute) {
+            // And only if we haven’t already run it today
+              if (lastRunDate !== todayStr); {
+                const cmdRef = db.ref(/houses/${houseId}/devices/${deviceId}/command);
+                cmdRef
+                    .set(command)
+                    .then(() => {
+                      console.log((Daily) Executed [${key}]: ${houseId}/${deviceId} → ${command} at ${hour}:${minute});
+                      // Update lastRunDate so it won’t run again until tomorrow
+                      return schedRef.child(key).update({lastRunDate: todayStr});
+                    })
+                    .catch((err) => {
+                      console.error(Error executing daily schedule ${key}:, err);
+                    });
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.error("runScheduledCommands encountered an error:", err);
+      }
+
+      return null;
+    },
+);

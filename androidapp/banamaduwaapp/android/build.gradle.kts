@@ -1,0 +1,38 @@
+buildscript {
+    repositories {
+        // Make sure you have Google's Maven repository here!
+        // This is crucial for finding Firebase and other Google libraries.
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // The Android Gradle plugin
+        classpath("com.android.tools.build:gradle:7.3.1")
+        // The Google Services plugin - required for Firebase
+        classpath("com.google.gms:google-services:4.3.15")
+        // Other build script dependencies go here
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+
+val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
+rootProject.layout.buildDirectory.value(newBuildDir)
+
+subprojects {
+    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
+    project.layout.buildDirectory.value(newSubprojectBuildDir)
+}
+subprojects {
+    project.evaluationDependsOn(":app")
+}
+
+tasks.register<Delete>("clean") {
+    delete(rootProject.layout.buildDirectory)
+}

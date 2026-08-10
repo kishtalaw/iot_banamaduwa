@@ -1,0 +1,83 @@
+/* RESET & BASE */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  font-family: sans-serif;
+  background-color: #121212;
+  color: #fff;
+  line-height: 1.4;
+  padding: 1rem;
+}
+
+/* UTILITY BUTTON CLASSES */
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.25rem;
+  font-size: 1rem;
+  cursor: pointer;
+  background-color: #555;
+  color: #fff;
+  flex: 1; /* allow buttons to grow equally */
+}
+.btn + .btn {
+  margin-left: 0.5rem;
+}
+.btn--green { background-color: #28a745; }
+.btn--blue  { background-color: #007bff; }
+.btn--red   { background-color: #dc3545; }
+.btn--yellow{ background-color: #ffc107; color: #000; }
+
+/* LAYOUT CONTAINERS */
+.top-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1rem;
+}
+.top-actions .btn + .btn {
+  margin-left: 0.75rem;
+}
+
+.device-card {
+  background: #1e1e1e;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+.device-card h3 {
+  margin: 0 0 0.5rem;
+}
+.device-card p {
+  margin: 0 0 1rem;
+}
+
+/* FLEXIBLE BUTTON GROUP */
+.button-group {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* RESPONSIVE STACKING */
+@media (max-width: 600px) {
+  .top-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .top-actions .btn {
+    width: 100%;
+    margin: 0 0 0.5rem;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+  .button-group .btn {
+    width: 100%;
+    margin: 0 0 0.5rem;
+  }
+  .button-group .btn + .btn {
+    margin-left: 0; /* reset side margin */
+  }
+}

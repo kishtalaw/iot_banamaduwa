@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
+  <title>Banamaduwa Automation</title>
+  <!-- Favicon -->
+  <link rel="icon" href="/assets/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16x16.png">
+  <link rel="manifest" href="/assets/site.webmanifest">
+  <link href="/src/output.css" rel="stylesheet">
+  <!-- Load your shared config.js so firebase.initializeApp(...) works -->
+  <script src="/js/config.js"></script>
+  <!-- Tailwind CSS 
+  <script src="https://cdn.tailwindcss.com"></script>-->
+  <!-- Heroicons
+  <script src="https://unpkg.com/heroicons@2.0.13/dist/outline.js"></script>-->
+
+  <!-- Firebase SDKs (App + Auth + Database only; no Firestore) -->
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.11.0/firebase-database-compat.js"></script>
+
+  <!-- FirebaseUI -->
+  <link rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.0.2/firebase-ui-auth.css" />
+  <script src="https://www.gstatic.com/firebasejs/ui/6.0.2/firebase-ui-auth.js"></script>
+
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-thumb { background-color: rgba(100,116,139,0.5); border-radius: 4px; }
+  </style>
+</head>
+
+<body class="bg-gray-50 dark:bg-gray-900 antialiased text-gray-800 dark:text-gray-100">
+  <!-- Header -->
+  <header class="bg-white dark:bg-gray-800 shadow sticky top-0 z-20">
+    <div class="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+      <!-- Logo -->
+      <div class="flex items-center space-x-3">
+        <img src="/assets/logo.png" alt="Logo" class="h-10 w-auto" />
+        <h1 class="text-2xl font-extrabold">බණමඩුව Automation</h1>
+      </div>
+      <!-- Menu & Actions -->
+      <div class="relative flex items-center">
+        <!-- Hamburger (mobile only) -->
+        <button id="menu-toggle" class="block md:hidden p-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition hidden">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+        <!-- Navigation buttons -->
+        <nav id="menu" class="hidden absolute top-full right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg md:static md:flex md:space-x-4 md:shadow-none md:bg-transparent md:dark:bg-transparent md:w-auto md:flex-wrap">
+          <button id="show-schedule-window" class="block w-full md:w-auto px-4 py-2 text-left md:text-center bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition hidden md:block">
+            Schedule
+          </button>
+          <button id="show-shortcut-builder" class="block w-full md:w-auto px-4 py-2 text-left md:text-center bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition hidden md:block">
+            Build Shortcut
+          </button>
+          <button id="sign-out-button" class="block w-full md:w-auto px-4 py-2 text-left md:text-center bg-red-600 hover:bg-red-700 text-white rounded-lg shadow transition hidden md:block">
+            Sign Out
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="pt-12 pb-20">
+    <div class="max-w-5xl mx-auto px-6 space-y-8">
+      <!-- FirebaseUI login & loader -->
+      <div id="firebaseui-auth-container" class="mx-auto w-full max-w-md"></div>
+      <div id="loader" class="text-center py-6 text-gray-500 dark:text-gray-400">Loading authentication…</div>
+
+      <!-- App (shown after login) -->
+      <section id="app-content" class="hidden space-y-8">
+        <!-- Welcome -->
+        <div class="bg-indigo-600 dark:bg-indigo-700 rounded-2xl shadow p-6">
+          <h2 class="text-xl font-semibold text-white">
+            Welcome, <span id="user-name" class="underline decoration-white/50"></span>!
+          </h2>
+        </div>
+
+        <!-- Devices -->
+        <div class="space-y-6">
+          <h3 class="text-lg font-medium">Your Devices</h3>
+          <div id="houses-container" class="space-y-12"></div>
+        </div>
+
+        <!-- Errors -->
+        <div id="error-message" class="hidden bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300 px-4 py-3 rounded-lg" role="alert"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- ========== Shortcut Builder Section (in‐page, hidden by default) ========== -->
+  <section id="shortcut-builder" class="fixed inset-0 overflow-auto bg-black bg-opacity-50" style="display:none; z-index:50;">
+    <div class="max-w-2xl mx-auto my-16 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+      <!-- Builder Header -->
+      <div class="bg-indigo-600 dark:bg-indigo-700 text-white px-6 py-4 flex justify-between items-center">
+        <h2 class="text-xl font-semibold">Shortcut Builder</h2>
+        <button id="close-shortcut-builder" class="text-white hover:text-gray-200 text-xl leading-none">
+          &times;
+        </button>
+      </div>
+
+      <!-- Builder Content -->
+      <!-- … -->
+		<!-- Builder Content -->
+		<div class="p-6 space-y-6 text-gray-100">
+		  <!-- 1) Select your houseId -->
+		  <div>
+			<p class="font-medium text-gray-100">1) Select your <code>Device ID</code>:</p>
+			<select id="sb-house-select"
+					class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100">
+			  <option value="" class="bg-gray-900 text-gray-100">-- Choose Device --</option>
+			</select>
+		  </div>
+
+		  <!-- 2) Select your deviceId -->
+		  <div>
+			<p class="font-medium text-gray-100">2) Select your <code>House ID</code>:</p>
+			<select id="sb-device-select"
+					class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100"
+					disabled>
+			  <option value="" class="bg-gray-900 text-gray-100">-- Choose House --</option>
+			</select>
+		  </div>
+
+		  <!-- 3) Choose action (unchanged) -->
+		  <div>
+			<p class="font-medium text-gray-100">3) Choose an action:</p>
+			<select id="sb-action-select"
+					class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100"
+					disabled>
+			  <option value="" class="bg-gray-900 text-gray-100">-- Select action --</option>
+			  <optgroup label="Gate Actions" class="bg-gray-800 text-gray-100">
+				<option value="OPEN"  class="bg-gray-900 text-gray-100">OPEN</option>
+				<option value="CLOSE" class="bg-gray-900 text-gray-100">CLOSE</option>
+				<option value="STOP"  class="bg-gray-900 text-gray-100">STOP</option>
+			  </optgroup>
+			  <optgroup label="Light Actions" class="bg-gray-800 text-gray-100">
+				<option value="ON"  class="bg-gray-900 text-gray-100">ON</option>
+				<option value="OFF" class="bg-gray-900 text-gray-100">OFF</option>
+			  </optgroup>
+			</select>
+		  </div>
+
+		  <!-- 4) Generate & Run Shortcut (unchanged) -->
+		  <div>
+			<button id="sb-generate-btn"
+					class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg"
+					disabled>
+			  Generate & Run Shortcut
+			</button>
+		  </div>
+
+		  <!-- 5) Run Shortcut link (unchanged) -->
+		  <div id="sb-run-container" style="display:none;" class="mt-4">
+			<p class="text-gray-200">Tap to run the “ControlDevice” shortcut on iOS:</p>
+			<a id="sb-run-link"
+			   class="block mt-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-center rounded-lg"
+			   href="#">
+			  Run “ControlDevice” Shortcut
+			</a>
+		  </div>
+		</div>
+		<!-- … -->
+
+    </div>
+  </section>
+  <!-- ========== End Shortcut Builder Section ========== -->
+  
+  <!-- ========== Schedule Command Modal (hidden by default) ========== -->
+<section id="schedule-window" class="fixed inset-0 z-50 hidden overflow-auto bg-black bg-opacity-50">
+  <div class="max-w-xl mx-auto my-20 bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+    <!-- Modal Header -->
+    <div class="bg-yellow-600 text-white px-6 py-4 flex justify-between items-center">
+      <h2 class="text-xl font-semibold">Schedule a Command</h2>
+      <button id="close-schedule-window" class="text-white hover:text-gray-200 text-xl leading-none">
+        &times;
+      </button>
+    </div>
+
+    <!-- Modal Body -->
+    <div class="p-6 space-y-6 text-gray-100">
+      <!-- 1) Select Device -->
+      <div>
+        <label for="sch-device-select" class="block font-medium">1) Choose Device</label>
+        <select id="sch-device-select" class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100">
+          <option value="">-- Choose Device --</option>
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+
+      <!-- 2) Select House -->
+      <div>
+        <label for="sch-house-select" class="block font-medium">2) Choose House</label>
+        <select id="sch-house-select" disabled class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100">
+          <option value="">-- Choose House --</option>
+          <!-- Populated dynamically -->
+        </select>
+      </div>
+
+      <!-- 3) Choose Command -->
+      <div>
+        <label for="sch-command-select" class="block font-medium">3) Choose Command</label>
+        <select id="sch-command-select" disabled class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100">
+          <option value="">-- Choose Command --</option>
+          <optgroup label="Gate Actions" class="bg-gray-800 text-gray-100">
+            <option value="open" class="bg-gray-900 text-gray-100">OPEN</option>
+            <option value="closed" class="bg-gray-900 text-gray-100">CLOSE</option>
+            <option value="stop" class="bg-gray-900 text-gray-100">STOP</option>
+          </optgroup>
+          <optgroup label="Light Actions" class="bg-gray-800 text-gray-100">
+            <option value="ON" class="bg-gray-900 text-gray-100">ON</option>
+            <option value="OFF" class="bg-gray-900 text-gray-100">OFF</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <!-- 4) Recurrence Type -->
+      <div>
+        <p class="font-medium">4) Recurrence</p>
+        <label class="inline-flex items-center">
+          <input type="radio" name="sch-type" value="once" checked class="form-radio text-yellow-400">
+          <span class="ml-2">One-Time</span>
+        </label>
+        <label class="inline-flex items-center ml-6">
+          <input type="radio" name="sch-type" value="daily" class="form-radio text-yellow-400">
+          <span class="ml-2">Daily</span>
+        </label>
+      </div>
+
+      <!-- 5A) One-Time Picker -->
+      <div id="sch-once-picker">
+        <label for="sch-once-datetime" class="block font-medium">5A) Run At (Date & Time)</label>
+        <input type="datetime-local"
+               id="sch-once-datetime"
+               class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100 px-2 py-1"
+        />
+      </div>
+
+      <!-- 5B) Daily Picker -->
+      <div id="sch-daily-picker" class="hidden">
+        <label for="sch-daily-time" class="block font-medium">5B) Run Daily At (Hour:Minute)</label>
+        <input type="time"
+               id="sch-daily-time"
+               class="mt-2 block w-full bg-gray-900 border border-gray-600 rounded-md text-gray-100 px-2 py-1"
+        />
+        <p class="mt-1 text-sm text-gray-400">
+          This command will run every day at the selected time.
+        </p>
+      </div>
+
+      <!-- 6) Submit Button -->
+      <div>
+        <button id="sch-submit-btn" class="w-full px-4 py-2 bg-yellow-500 hover:bg-yellow-600 text-gray-900 rounded-lg font-medium" disabled>
+          Schedule Command
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ========== End Schedule Command Modal ========== -->
+
+
+  <script src="/js/script.js"></script>
+  <script>
+    // ========== Show/Hide Builder Button Based on Auth ==========
+    //const showBuilderBtn = document.getElementById("show-shortcut-builder");
+    //const builderSection = document.getElementById("shortcut-builder");
+    //const closeBuilderBtn = document.getElementById("close-shortcut-builder");
+	const menuToggleBtn = document.getElementById("menu-toggle");
+	const menuNav = document.getElementById('menu');
+	// Hamburger toggle
+	menuToggleBtn.addEventListener('click', () => {
+		menuNav.classList.toggle('hidden');
+	});
+
+
+    firebase.auth().onAuthStateChanged(user => {
+      if (user) {
+        showBuilderBtn.style.display = "inline-block";
+		signOutButton.style.display = "inline-block";
+		menuToggleBtn.classList.remove('hidden'); // show burger on mobile
+//        document.getElementById("user-email").textContent = user.email;
+		document.getElementById('user-name').textContent = user.displayName || user.email.split('@')[0];
+        document.getElementById("app-content").classList.remove("hidden");
+        document.getElementById("loader").classList.add("hidden");
+      } else {
+        showBuilderBtn.style.display = "none";
+        builderSection.style.display = "none";
+		signOutButton.style.display = "none";
+		menuToggleBtn.classList.add('hidden');
+        document.getElementById("app-content").classList.add("hidden");
+        document.getElementById("loader").classList.remove("hidden");
+      }
+    });
+
+    // ========== Builder Toggle ==========
+    showBuilderBtn.onclick = () => {
+      builderSection.style.display = "block";
+      initializeBuilder();
+    };
+    closeBuilderBtn.onclick = () => {
+      builderSection.style.display = "none";
+    };
+  </script>
+  <div style="margin-bottom: 50px;">
+        <h2>Banamaduwa Internal CMS</h2>
+        <p>System is connected to the <b>YouTube Data API</b>.</p>
+        
+        <!-- A simple button with the word YouTube counts as branding -->
+        <button style="padding: 10px 20px; background-color: #FF0000; color: white; border: none; border-radius: 5px; font-weight: bold;">
+            ▶ Upload Video to YouTube
+        </button>
+  </div>
+  <footer>
+	<hr>
+	<p>© 2026 Banamaduwa. All Rights Reserved.</p>
+	<p>
+		<a href="/privacy.html">Privacy Policy</a> | 
+		<a href="/terms.html">Terms of Service</a>
+	</p>
+  </footer>
+</body>
+</html>
