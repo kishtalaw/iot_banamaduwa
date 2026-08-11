@@ -14,7 +14,7 @@ const PROJECT = process.env.GCP_PROJECT || process.env.GCLOUD_PROJECT;
 const LOCATION = "us-central1";
 const QUEUE = "gate-reset-queue";
 const RESET_BASEURL = `https://${LOCATION}-${PROJECT}.cloudfunctions.net`;
-const functionsV1 = require("firebase-functions/v1");
+// const functionsV1 = require("firebase-functions/v1");
 
 // functions/index.js
 exports.createDailyJob = require("./schedulerManager").createDailyJob;
@@ -292,28 +292,31 @@ exports.hello = onRequest(async (req, res) => {
  * V1 Database trigger that fires whenever a command is written.
  * This captures direct database writes from the Web and Android Firebase SDKs.
  */
-exports.logAppCommands = functionsV1.database
-    .ref("houses/{houseId}/devices/{deviceId}/command")
-    .onWrite(async (change, context) => {
-      const command = change.after.val();
+exports.logAppCommands = onValueWritten(
+    {ref: "houses/{houseId}/devices/{deviceId}/command", region: LOCATION},
+    async (event) => {
+      const command = event.data.after.val();
 
-      // Ignore deletions or the automated "STOP" commands sent by the system
+      // 1. Ignore deletions or the automated "STOP" commands
       if (!command || command === "STOP") {
         return null;
       }
 
-      const auth = context.auth;
-	  
-	  if (!auth || !auth.uid) {
+      // 2. Safely capture the auth ID (handling both camelCase and lowercase)
+      const uid = event.authId || event.authid;
+
+      // 3. CRITICAL FIX: Ignore writes from the backend
+      // Admin SDK writes do not have an auth ID. If it's missing, skip the log.
+      if (!uid) {
         console.log("Write originated from backend/Admin SDK. Skipping duplicate log.");
         return null;
       }
-	  
-	  // If we reach this point, it came from the Android or Web app directly!
-      const uid = auth.uid;
+
+      // If we reach this point, it came from an authenticated user!
       let userEmail = "Unknown";
       let userName = "Unknown";
 
+      // 4. Fetch user details from Firebase Auth
       try {
         const userRecord = await admin.auth().getUser(uid);
         userEmail = userRecord.email || "No email";
@@ -322,17 +325,17 @@ exports.logAppCommands = functionsV1.database
         console.warn(`Could not fetch user details for uid: ${uid}`);
       }
 
-      const houseId = context.params.houseId;
-      const deviceId = context.params.deviceId;
+      const houseId = event.params.houseId;
+      const deviceId = event.params.deviceId;
       const now = Date.now();
       const logsRef = admin.database().ref(`houses/${houseId}/logs`);
 
-	  // Calculate local time (+05:30)
+      // Calculate local time (+05:30)
       const OFFSET_MS = 5.5 * 60 * 60 * 1000;
-      const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "");
+      const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "+05:30");
 
       try {
-      // A) Write the audit log
+        // Write the audit log
         await logsRef.push({
           uid,
           email: userEmail,
@@ -344,7 +347,7 @@ exports.logAppCommands = functionsV1.database
           source: "Firebase SDK App",
         });
 
-        // B) Clean up logs older than 30 days
+        // Clean up logs older than 30 days
         const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
         const cutoffTime = now - THIRTY_DAYS_MS;
 
@@ -356,14 +359,15 @@ exports.logAppCommands = functionsV1.database
         if (oldLogsSnap.exists()) {
           const updates = {};
           oldLogsSnap.forEach((child) => {
-            updates[child.key] = null; // Setting to null deletes the node
+            updates[child.key] = null; 
           });
           await logsRef.update(updates);
-          console.log(`Cleaned up ${Object.keys(updates).length} log entries older than 30 days.`);
+          console.log(`Cleaned up ${Object.keys(updates).length} old logs.`);
         }
       } catch (logErr) {
         console.error("Failed to write database audit log:", logErr);
       }
 
       return null;
-    });
+    }
+);
