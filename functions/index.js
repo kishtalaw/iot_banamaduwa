@@ -239,7 +239,7 @@ exports.hello = onRequest(async (req, res) => {
     const logsRef = db.ref(`houses/${houseId}/logs`);
 
 	const OFFSET_MS = 5.5 * 60 * 60 * 1000;
-    const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "+05:30");
+    const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "");
     
     try {
       // A) Write the new log entry
@@ -329,7 +329,7 @@ exports.logAppCommands = functionsV1.database
 
 	  // Calculate local time (+05:30)
       const OFFSET_MS = 5.5 * 60 * 60 * 1000;
-      const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "+05:30");
+      const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "");
 
       try {
       // A) Write the audit log
