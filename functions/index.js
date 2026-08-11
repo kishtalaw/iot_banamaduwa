@@ -119,6 +119,12 @@ exports.hello = onRequest(async (req, res) => {
   console.log("Request received. Headers:", JSON.stringify(req.headers));
   console.log("Request body:", JSON.stringify(req.body));
 
+  // Ensure Firebase Admin is initialized for Auth and DB access
+  const admin = require("firebase-admin");
+  if (!admin.apps.length) {
+    admin.initializeApp();
+  }
+
   // 1) Only allow POST
   if (req.method !== "POST") {
     return res.status(405).send("Method Not Allowed: Only POST is accepted.");
@@ -134,7 +140,7 @@ exports.hello = onRequest(async (req, res) => {
     return res.status(500).send("Internal Server Error: Cannot retrieve API key.");
   }
 
-  // 3) Validate x‑api‑key header
+  // 3) Validate x-api-key header
   const apiKeyHeader = req.headers["x-api-key"];
   if (apiKeyHeader !== API_KEY) {
     return res.status(401).send("Unauthorized: Invalid API key.");
@@ -164,7 +170,6 @@ exports.hello = onRequest(async (req, res) => {
   const db = admin.database();
 
   // 5) Check user_access under correct path:
-  //    /user_access/{uid}/{houseId}/{deviceId}
   try {
     const accessSnap = await db
         .ref(`user_access/${uid}/${deviceId}/${houseId}`)
@@ -177,7 +182,7 @@ exports.hello = onRequest(async (req, res) => {
     return res.status(500).send("Internal Server Error: could not verify access.");
   }
 
-  // 6) (Optional) Load device metadata to discover its type
+  // 6) Load device metadata to discover its type
   let deviceType = null;
   try {
     const deviceSnap = await db
@@ -189,7 +194,7 @@ exports.hello = onRequest(async (req, res) => {
     console.warn("Could not read device type, proceeding anyway:", e);
   }
 
-  // AFTER user‐access check, BEFORE writing command:
+  // AFTER user-access check, BEFORE writing command:
   const deviceRef = db.ref(`houses/${houseId}/devices/${deviceId}`);
 
   try {
@@ -200,23 +205,73 @@ exports.hello = onRequest(async (req, res) => {
 
     // allow only if seen within the last 60 seconds
     const OFFLINE_THRESHOLD = 45 * 1000;
-    if (now - lastSeen > OFFLINE_THRESHOLD) {
+    if ((now - lastSeen > OFFLINE_THRESHOLD)  &&  (deviceType === "gate")) {
       console.warn(`Device ${deviceId} offline (lastSeen ${now - lastSeen}ms ago)`);
       return res.status(409).send("Device appears offline. Try again when it reconnects.");
     }
   } catch (err) {
     console.error("Error checking device lastSeen:", err);
-    return res.status(500).send("Internal Server Error during device‑online check.");
+    return res.status(500).send("Internal Server Error during device-online check.");
   }
 
   // 7) Write the command + timestamp
   try {
+    const now = Date.now();
     const cmdRef = db.ref(`houses/${houseId}/devices/${deviceId}`);
     await cmdRef.update({
       command,
-      commandTimestamp: Date.now(),
+      commandTimestamp: now,
     });
     console.log(`Wrote command ${command} @ ${houseId}/${deviceId}`);
+
+    // --- 8) AUDIT LOGGING & 30-DAY CLEANUP ---
+    let userEmail = "Unknown";
+    let userName = "Unknown";
+    
+    try {
+      const userRecord = await admin.auth().getUser(uid);
+      userEmail = userRecord.email || "No email";
+      userName = userRecord.displayName || "No name";
+    } catch (authErr) {
+      console.warn(`Could not fetch user details for uid: ${uid}`);
+    }
+
+    const logsRef = db.ref(`houses/${houseId}/logs`);
+    
+    try {
+      // A) Write the new log entry
+      await logsRef.push({
+        uid,
+        email: userEmail,
+        name: userName,
+        action: command,
+        deviceId,
+        timestamp: now,
+        dateString: new Date(now).toISOString()
+      });
+
+      // B) Clean up logs older than 30 days
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const cutoffTime = now - THIRTY_DAYS_MS;
+      
+      const oldLogsSnap = await logsRef
+          .orderByChild("timestamp")
+          .endAt(cutoffTime)
+          .once("value");
+
+      if (oldLogsSnap.exists()) {
+        const updates = {};
+        oldLogsSnap.forEach((child) => {
+          updates[child.key] = null; // Setting to null deletes the node
+        });
+        await logsRef.update(updates);
+        console.log(`Cleaned up ${Object.keys(updates).length} log entries older than 30 days.`);
+      }
+    } catch (logErr) {
+      console.error("Failed to write audit log or run cleanup:", logErr);
+    }
+    // --- END AUDIT LOGGING ---
+
     return res.status(200).json({
       success: true,
       houseId,
@@ -245,7 +300,14 @@ exports.logAppCommands = functionsV1.database
       }
 
       const auth = context.auth;
-      let uid = "Unknown";
+	  
+	  if (!auth || !auth.uid) {
+        console.log("Write originated from backend/Admin SDK. Skipping duplicate log.");
+        return null;
+      }
+	  
+	  // If we reach this point, it came from the Android or Web app directly!
+      const uid = auth.uid;
       let userEmail = "Unknown";
       let userName = "Unknown";
 
