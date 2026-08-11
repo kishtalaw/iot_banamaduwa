@@ -237,6 +237,9 @@ exports.hello = onRequest(async (req, res) => {
     }
 
     const logsRef = db.ref(`houses/${houseId}/logs`);
+
+	const OFFSET_MS = 5.5 * 60 * 60 * 1000;
+    const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "+05:30");
     
     try {
       // A) Write the new log entry
@@ -247,7 +250,7 @@ exports.hello = onRequest(async (req, res) => {
         action: command,
         deviceId,
         timestamp: now,
-        dateString: new Date(now).toISOString()
+        dateString: localDateString
       });
 
       // B) Clean up logs older than 30 days
@@ -331,6 +334,10 @@ exports.logAppCommands = functionsV1.database
       const now = Date.now();
       const logsRef = admin.database().ref(`houses/${houseId}/logs`);
 
+	  // Calculate local time (+05:30)
+      const OFFSET_MS = 5.5 * 60 * 60 * 1000;
+      const localDateString = new Date(now + OFFSET_MS).toISOString().replace("Z", "+05:30");
+
       try {
       // A) Write the audit log
         await logsRef.push({
@@ -340,7 +347,7 @@ exports.logAppCommands = functionsV1.database
           action: command,
           deviceId,
           timestamp: now,
-          dateString: new Date(now).toISOString(),
+          dateString: localDateString,
           source: "Firebase SDK App",
         });
 
