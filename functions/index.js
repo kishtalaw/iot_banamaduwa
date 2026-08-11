@@ -314,19 +314,12 @@ exports.logAppCommands = functionsV1.database
       let userEmail = "Unknown";
       let userName = "Unknown";
 
-      // Extract the UID if the write came from an authenticated Firebase SDK user
-      if (auth && auth.uid) {
-        uid = auth.uid;
-        try {
-          const userRecord = await admin.auth().getUser(uid);
-          userEmail = userRecord.email || "No email";
-          userName = userRecord.displayName || "No name";
-        } catch (e) {
-          console.warn(`Could not fetch user details for uid: ${uid}`);
-        }
-      } else if (auth && auth.admin) {
-        uid = "System/Admin";
-        userName = "Automated Task";
+      try {
+        const userRecord = await admin.auth().getUser(uid);
+        userEmail = userRecord.email || "No email";
+        userName = userRecord.displayName || "No name";
+      } catch (e) {
+        console.warn(`Could not fetch user details for uid: ${uid}`);
       }
 
       const houseId = context.params.houseId;
